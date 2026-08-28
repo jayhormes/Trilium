@@ -9,12 +9,24 @@
  */
 export function buildShareLink(shareId: string, syncServerHost: string | null | undefined): string {
     if (syncServerHost) {
-        return new URL(`/share/${shareId}`, syncServerHost).href;
+        return appendSharePath(syncServerHost, shareId);
     }
 
     if (window.glob.httpBaseUrl) {
-        return new URL(`/share/${shareId}`, window.glob.httpBaseUrl).href;
+        return appendSharePath(window.glob.httpBaseUrl, shareId);
     }
 
-    return `${location.protocol}//${location.host}${location.pathname}share/${shareId}`;
+    return appendSharePath(location.href, shareId);
+}
+
+// `new URL("/share/x", base)` cannot stand in here: the leading slash makes the path absolute
+// and drops the base's own path, which an instance reverse-proxied under a subpath needs.
+function appendSharePath(base: string, shareId: string): string {
+    const url = new URL(base);
+
+    url.search = "";
+    url.hash = "";
+    url.pathname = `${url.pathname.replace(/\/+$/, "")}/share/${shareId}`;
+
+    return url.href;
 }
