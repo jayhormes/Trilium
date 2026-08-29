@@ -930,14 +930,21 @@
   },
   "promoted_attributes": {
     "promoted_attributes": "升級屬性",
+    "unset-field-placeholder": "未設定",
     "url_placeholder": "http://網站連結...",
     "open_external_link": "打開外部連結",
+    "send_email": "傳送電子郵件至此地址",
+    "call_phone": "撥打此號碼",
+    "create_option": "建立「{{- option}}」",
     "unknown_label_type": "未知的標籤類型 '{{type}}'",
     "unknown_attribute_type": "未知的屬性類型 '{{type}}'",
     "add_new_attribute": "新增屬性",
     "remove_this_attribute": "移除此屬性",
-    "unset-field-placeholder": "未設定",
-    "remove_color": "移除此顏色標籤"
+    "remove_color": "移除此顏色標籤",
+    "remove_value": "移除此值",
+    "select_values_placeholder": "選擇選項或新增一個",
+    "values_placeholder": "輸入值後按 Enter",
+    "add_value": "新增此值"
   },
   "script_executor": {
     "query": "查詢",
