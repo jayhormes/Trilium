@@ -1,0 +1,49 @@
+# Builds an unsigned desktop app from this fork, carrying the share-link subpath fix.
+# Runs on every push to a build/** branch; artifacts expire with the run.
+name: Build patched desktop
+
+on:
+  push:
+    branches:
+      - build/**
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: windows
+            image: windows-latest
+            forge_platform: win32
+            arch: x64
+    name: ${{ matrix.target.name }} ${{ matrix.target.arch }}
+    runs-on: ${{ matrix.target.image }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - name: Set up node & dependencies
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+      - name: Set up macOS packaging dependencies
+        if: ${{ runner.os == 'macOS' }}
+        run: brew install python-setuptools create-dmg
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          npm_config_package_import_method: copy
+      - name: Update build info
+        run: pnpm run chore:update-build-info
+      - name: Build the desktop app
+        env:
+          TRILIUM_ARTIFACT_NAME_HINT: TriliumNotes-share-subpath-${{ matrix.target.name }}-${{ matrix.target.arch }}
+          TARGET_ARCH: ${{ matrix.target.arch }}
+        run: pnpm run --filter desktop electron-forge:make --arch=${{ matrix.target.arch }} --platform=${{ matrix.target.forge_platform }}
+      - name: Publish artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: TriliumNotes ${{ matrix.target.name }} ${{ matrix.target.arch }} patched
+          path: apps/desktop/upload
