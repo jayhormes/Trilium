@@ -18,23 +18,33 @@ export function isImageCopySupported() {
         return true;
     }
 
+    return hasWebClipboardWrite();
+}
+
+function hasWebClipboardWrite() {
     return window.isSecureContext && typeof ClipboardItem !== "undefined" && typeof navigator.clipboard?.write === "function";
 }
 
 /** Copies the actual image (not a reference to it) to the system clipboard. */
 export async function copyImageToClipboard(src: string) {
     try {
-        if (utils.isElectron()) {
-            const blob = await fetchImageBlob(src);
-            const buffer = new Uint8Array(await blob.arrayBuffer());
-            window.electronApi?.clipboard.copyImageToClipboard(buffer);
-        } else {
+        if (hasWebClipboardWrite()) {
+            // Preferred on desktop too: Chromium's own clipboard writer also publishes the
+            // platform bitmap formats (e.g. CF_DIB on Windows). Since Electron 44 the main-process
+            // bridge goes through `clipboard.write()` instead of `writeImage()`, and images copied
+            // that way could no longer be pasted into other apps (e.g. a browser on Windows).
             // The Web Clipboard API reliably accepts only PNG, so render the image to PNG through
             // an <img> + canvas. The browser's own image decoder handles every format it can
             // display (JPEG, WebP, GIF, SVG, …), whereas createImageBitmap rejects some of them.
             // A concrete Blob is written (not a Promise), which Firefox needs.
             const pngBlob = await renderImageToPng(src);
             await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+        } else if (utils.isElectron()) {
+            const blob = await fetchImageBlob(src);
+            const buffer = new Uint8Array(await blob.arrayBuffer());
+            window.electronApi?.clipboard.copyImageToClipboard(buffer);
+        } else {
+            throw new Error("No clipboard API available to write images.");
         }
 
         toastService.showMessage(t("image.image-copied-to-clipboard"));

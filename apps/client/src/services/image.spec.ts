@@ -260,6 +260,7 @@ describe("copyImageToClipboard", () => {
         })));
         const copySpy = vi.fn();
         (window as any).electronApi = { clipboard: { copyImageToClipboard: copySpy } };
+        vi.stubGlobal("ClipboardItem", undefined);
 
         await copyImageToClipboard("api/images/abc/x.png");
 
@@ -270,8 +271,42 @@ describe("copyImageToClipboard", () => {
         expect(toastService.showMessage).toHaveBeenCalledTimes(1);
     });
 
+    it("prefers the Web Clipboard API over the Electron bridge when it is available", async () => {
+        vi.mocked(utils.isElectron).mockReturnValue(true);
+        vi.stubGlobal("isSecureContext", true);
+        stubDrawableImage();
+        const pngBlob = new Blob(["x"], { type: "image/png" });
+        stubCanvasFactory({ toBlob: (cb: (b: Blob | null) => void) => cb(pngBlob) });
+        vi.stubGlobal("ClipboardItem", class {
+            constructor(public readonly data: unknown) {}
+        });
+        const writeSpy = vi.fn(async () => {});
+        vi.stubGlobal("navigator", { clipboard: { write: writeSpy } });
+        const copySpy = vi.fn();
+        (window as any).electronApi = { clipboard: { copyImageToClipboard: copySpy } };
+
+        await copyImageToClipboard("api/images/abc/x.png");
+
+        expect(writeSpy).toHaveBeenCalledTimes(1);
+        expect(copySpy).not.toHaveBeenCalled();
+        expect(toastService.showMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports an error when no clipboard API can write images", async () => {
+        vi.mocked(utils.isElectron).mockReturnValue(false);
+        vi.stubGlobal("ClipboardItem", undefined);
+        const showErrorSpy = vi.spyOn(toastModule, "showError").mockImplementation(() => {});
+
+        await copyImageToClipboard("data:image/png;base64,AAAA");
+
+        expect((window as any).logError).toHaveBeenCalledTimes(1);
+        expect(showErrorSpy).toHaveBeenCalledTimes(1);
+        expect(toastService.showMessage).not.toHaveBeenCalled();
+    });
+
     it("renders the image to a PNG and writes it via the Web Clipboard API", async () => {
         vi.mocked(utils.isElectron).mockReturnValue(false);
+        vi.stubGlobal("isSecureContext", true);
         stubDrawableImage();
         const pngBlob = new Blob(["x"], { type: "image/png" });
         stubCanvasFactory({ toBlob: (cb: (b: Blob | null) => void) => cb(pngBlob) });
@@ -289,6 +324,11 @@ describe("copyImageToClipboard", () => {
 
     it("reports an error when the image has no drawable dimensions", async () => {
         vi.mocked(utils.isElectron).mockReturnValue(false);
+        vi.stubGlobal("isSecureContext", true);
+        vi.stubGlobal("ClipboardItem", class {
+            constructor(public readonly data: unknown) {}
+        });
+        vi.stubGlobal("navigator", { clipboard: { write: vi.fn(async () => {}) } });
         stubDrawableImage();
         // getContext returns null -> renderImageToPng throws before encoding.
         stubCanvasFactory({ getContext: () => null });
@@ -303,6 +343,7 @@ describe("copyImageToClipboard", () => {
 
     it("reports an error when the canvas cannot encode the image as PNG", async () => {
         vi.mocked(utils.isElectron).mockReturnValue(false);
+        vi.stubGlobal("isSecureContext", true);
         stubDrawableImage();
         // toBlob calls back with null -> the encoding promise rejects.
         stubCanvasFactory({ toBlob: (cb: (b: Blob | null) => void) => cb(null) });
