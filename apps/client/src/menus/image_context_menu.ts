@@ -33,7 +33,10 @@ function setupContextMenu($image: JQuery<HTMLElement>) {
                 if (command === "copyImageReferenceToClipboard") {
                     imageService.copyImageReferenceToClipboard($image);
                 } else if (command === "copyImageToClipboard") {
-                    const src = $image.attr("src");
+                    // Callers may pass the image itself or a wrapper around it (the zoomable
+                    // image viewer of image notes and attachments), so look for the <img> inside.
+                    const $img = $image.is("img") ? $image : $image.find("img").first();
+                    const src = $img.attr("src");
                     if (!src) {
                         console.error("Missing src");
                         return;
