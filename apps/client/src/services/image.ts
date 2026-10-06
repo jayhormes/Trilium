@@ -29,20 +29,18 @@ function hasWebClipboardWrite() {
 export async function copyImageToClipboard(src: string) {
     try {
         if (hasWebClipboardWrite()) {
-            // Preferred on desktop too: Chromium's own clipboard writer also publishes the
-            // platform bitmap formats (e.g. CF_DIB on Windows). Since Electron 44 the main-process
-            // bridge goes through `clipboard.write()` instead of `writeImage()`, and images copied
-            // that way could no longer be pasted into other apps (e.g. a browser on Windows).
-            // The Web Clipboard API reliably accepts only PNG, so render the image to PNG through
-            // an <img> + canvas. The browser's own image decoder handles every format it can
-            // display (JPEG, WebP, GIF, SVG, …), whereas createImageBitmap rejects some of them.
-            // A concrete Blob is written (not a Promise), which Firefox needs.
-            const pngBlob = await renderImageToPng(src);
-            await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+            try {
+                await writeImageThroughWebClipboard(src);
+            } catch (e) {
+                // The Web Clipboard API refuses to write while the document isn't focused, so the
+                // desktop app falls back to its native bridge rather than failing the copy.
+                if (!utils.isElectron()) {
+                    throw e;
+                }
+                await writeImageThroughElectron(src);
+            }
         } else if (utils.isElectron()) {
-            const blob = await fetchImageBlob(src);
-            const buffer = new Uint8Array(await blob.arrayBuffer());
-            window.electronApi?.clipboard.copyImageToClipboard(buffer);
+            await writeImageThroughElectron(src);
         } else {
             throw new Error("No clipboard API available to write images.");
         }
@@ -52,6 +50,26 @@ export async function copyImageToClipboard(src: string) {
         logError(`Failed to copy image to clipboard: ${e}`);
         showError(t("image.cannot-copy-image"));
     }
+}
+
+/**
+ * Preferred on desktop too: Chromium's own clipboard writer also publishes the platform bitmap
+ * formats (e.g. CF_DIB on Windows), which every app can paste.
+ *
+ * The Web Clipboard API reliably accepts only PNG, so render the image to PNG through an <img> +
+ * canvas. The browser's own image decoder handles every format it can display (JPEG, WebP, GIF,
+ * SVG, …), whereas createImageBitmap rejects some of them. A concrete Blob is written (not a
+ * Promise), which Firefox needs.
+ */
+async function writeImageThroughWebClipboard(src: string) {
+    const pngBlob = await renderImageToPng(src);
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+}
+
+async function writeImageThroughElectron(src: string) {
+    const blob = await fetchImageBlob(src);
+    const buffer = new Uint8Array(await blob.arrayBuffer());
+    window.electronApi?.clipboard.copyImageToClipboard(buffer);
 }
 
 /** Downloads the image to the user's device. */

@@ -292,6 +292,29 @@ describe("copyImageToClipboard", () => {
         expect(toastService.showMessage).toHaveBeenCalledTimes(1);
     });
 
+    it("falls back to the Electron bridge when the Web Clipboard API refuses to write", async () => {
+        vi.mocked(utils.isElectron).mockReturnValue(true);
+        vi.stubGlobal("isSecureContext", true);
+        stubDrawableImage();
+        const pngBlob = new Blob(["x"], { type: "image/png" });
+        stubCanvasFactory({ toBlob: (cb: (b: Blob | null) => void) => cb(pngBlob) });
+        vi.stubGlobal("ClipboardItem", class {
+            constructor(public readonly data: unknown) {}
+        });
+        vi.stubGlobal("navigator", { clipboard: { write: vi.fn(async () => { throw new Error("Document is not focused."); }) } });
+        vi.stubGlobal("fetch", vi.fn(async () => ({
+            ok: true,
+            blob: async () => ({ arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer })
+        })));
+        const copySpy = vi.fn();
+        (window as any).electronApi = { clipboard: { copyImageToClipboard: copySpy } };
+
+        await copyImageToClipboard("api/images/abc/x.png");
+
+        expect(copySpy).toHaveBeenCalledTimes(1);
+        expect(toastService.showMessage).toHaveBeenCalledTimes(1);
+    });
+
     it("reports an error when no clipboard API can write images", async () => {
         vi.mocked(utils.isElectron).mockReturnValue(false);
         vi.stubGlobal("ClipboardItem", undefined);
